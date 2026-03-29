@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { ADMIN_ACCOUNT, getBlogDataForUser } from '../data/blogData';
+import { ADMIN_ACCOUNT, getBlogDataForUser, getPostDisplayTime } from '../data/blogData';
 
 const BASE_WIDTH = 375;
 
@@ -23,6 +23,7 @@ const getScale = (screenWidth, size) => {
 export default function FeedScreen({
   currentUser = ADMIN_ACCOUNT,
   onOpenProfile = () => {},
+  onOpenCreate = () => {},
 }) {
   const { width } = useWindowDimensions();
 
@@ -49,6 +50,25 @@ export default function FeedScreen({
 
   const styles = useMemo(() => createStyles(s), [s]);
 
+  const renderPostCard = (post, isFeatured = false) => (
+    <View key={post.id} style={[styles.postCard, isFeatured && styles.featuredCard]}>
+      <View style={styles.postHeader}>
+        <Pressable onPress={onOpenProfile} hitSlop={10}>
+          <Image source={{ uri: profile.avatar }} style={styles.postAvatar} />
+        </Pressable>
+
+        <View>
+          <Text style={styles.postName}>{profile.name}</Text>
+          <Text style={styles.postTime}>{getPostDisplayTime(post)}</Text>
+        </View>
+      </View>
+
+      <Text style={styles.postCaption}>{post.caption}</Text>
+
+      <Image source={{ uri: post.image }} style={styles.postImage} />
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor="#F4F4F6" />
@@ -68,55 +88,30 @@ export default function FeedScreen({
             <Text style={styles.headerSub}>
               {profile.role === 'admin'
                 ? 'Đang xem blog riêng của admin'
-                : 'Đang xem blog của chính bạn'}
+                : 'Đang xem blog cá nhân của bạn'}
             </Text>
+          </Pressable>
+
+          <Pressable style={styles.createButton} onPress={onOpenCreate}>
+            <Text style={styles.createButtonText}>Tạo bài</Text>
           </Pressable>
         </View>
 
         {featuredPost ? (
-          <View style={styles.postCard}>
-            <View style={styles.postHeader}>
-              <Pressable onPress={onOpenProfile} hitSlop={10}>
-                <Image source={{ uri: profile.avatar }} style={styles.postAvatar} />
-              </Pressable>
-
-              <View>
-                <Text style={styles.postName}>{profile.name}</Text>
-                <Text style={styles.postTime}>{featuredPost.time}</Text>
-              </View>
-            </View>
-
-            <Text style={styles.postCaption}>{featuredPost.caption}</Text>
-
-            <Image source={{ uri: featuredPost.image }} style={styles.postImage} />
-          </View>
+          renderPostCard(featuredPost, true)
         ) : (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Chưa có bài viết</Text>
             <Text style={styles.emptyText}>
-              Đăng ký thành công rồi, giờ bạn có thể bổ sung bài viết mới cho blog của mình.
+              Bạn đã vào đúng feed rồi. Chỉ còn thiếu một bài đăng đầu tiên để lấp đầy blog cá nhân.
             </Text>
+            <Pressable style={styles.emptyButton} onPress={onOpenCreate}>
+              <Text style={styles.emptyButtonText}>Tạo bài viết ngay</Text>
+            </Pressable>
           </View>
         )}
 
-        {posts.map((post) => (
-          <View key={post.id} style={styles.postCard}>
-            <View style={styles.postHeader}>
-              <Pressable onPress={onOpenProfile} hitSlop={10}>
-                <Image source={{ uri: profile.avatar }} style={styles.postAvatar} />
-              </Pressable>
-
-              <View>
-                <Text style={styles.postName}>{profile.name}</Text>
-                <Text style={styles.postTime}>{post.time}</Text>
-              </View>
-            </View>
-
-            <Text style={styles.postCaption}>{post.caption}</Text>
-
-            <Image source={{ uri: post.image }} style={styles.postImage} />
-          </View>
-        ))}
+        {posts.map((post) => renderPostCard(post))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -160,11 +155,28 @@ const createStyles = (s) =>
       color: '#6B7280',
       fontWeight: '500',
     },
+    createButton: {
+      minWidth: getScale(BASE_WIDTH, 88),
+      height: getScale(BASE_WIDTH, 38),
+      borderRadius: getScale(BASE_WIDTH, 12),
+      backgroundColor: '#111827',
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: s.spacingSm,
+    },
+    createButtonText: {
+      color: '#FFFFFF',
+      fontSize: getScale(BASE_WIDTH, 13),
+      fontWeight: '800',
+    },
     postCard: {
       backgroundColor: '#ECECEE',
       borderRadius: s.radiusLg,
       padding: s.spacingMd,
       marginBottom: s.spacingMd,
+    },
+    featuredCard: {
+      backgroundColor: '#E6ECF5',
     },
     postHeader: {
       flexDirection: 'row',
@@ -201,6 +213,7 @@ const createStyles = (s) =>
       width: '100%',
       height: s.postImageHeight,
       borderRadius: s.radiusLg,
+      backgroundColor: '#D1D5DB',
     },
     emptyCard: {
       backgroundColor: '#ECECEE',
@@ -219,5 +232,19 @@ const createStyles = (s) =>
       lineHeight: Math.round(s.bodySize * 1.45),
       color: '#4B5563',
       fontWeight: '500',
+    },
+    emptyButton: {
+      marginTop: s.spacingMd,
+      alignSelf: 'flex-start',
+      paddingHorizontal: s.spacingMd,
+      height: getScale(BASE_WIDTH, 42),
+      borderRadius: getScale(BASE_WIDTH, 12),
+      justifyContent: 'center',
+      backgroundColor: '#111827',
+    },
+    emptyButtonText: {
+      color: '#FFFFFF',
+      fontSize: getScale(BASE_WIDTH, 14),
+      fontWeight: '700',
     },
   });

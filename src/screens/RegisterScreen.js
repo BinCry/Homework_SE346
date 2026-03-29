@@ -29,6 +29,19 @@ const getScale = (screenWidth, size) => {
   return Math.max(size * 0.85, Math.min(scaled, size * 1.25));
 };
 
+const cardShadowStyle =
+  Platform.OS === 'web'
+    ? {
+        boxShadow: '0px 10px 18px rgba(18, 24, 38, 0.1)',
+      }
+    : {
+        shadowColor: '#121826',
+        shadowOpacity: 0.1,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 6,
+      };
+
 export default function RegisterScreen({
   onRegisterSuccess = () => {},
   onSwitchToLogin = () => {},
@@ -120,17 +133,7 @@ export default function RegisterScreen({
       setEmail('');
       setPassword('');
       setConfirmPassword('');
-
-      Alert.alert(
-        'Đăng ký thành công',
-        'Bạn có thể đăng nhập bằng tài khoản vừa tạo.',
-        [
-          {
-            text: 'OK',
-            onPress: () => onRegisterSuccess(newAccount),
-          },
-        ]
-      );
+      onRegisterSuccess(newAccount);
     } catch (error) {
       Alert.alert('Có lỗi xảy ra', 'Không thể lưu tài khoản lúc này.');
     } finally {
@@ -260,11 +263,7 @@ const createStyles = (s, width, height) => {
       borderColor: '#D5DBE6',
       paddingHorizontal: s.spacingLg,
       paddingVertical: s.spacingXl,
-      shadowColor: '#121826',
-      shadowOpacity: 0.1,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: 10 },
-      elevation: 6,
+      ...cardShadowStyle,
     },
     title: {
       fontSize: s.titleSize,

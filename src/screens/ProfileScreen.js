@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import {
   Image,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -20,14 +21,29 @@ const getScale = (screenWidth, size) => {
   return Math.max(size * 0.85, Math.min(scaled, size * 1.25));
 };
 
+const cardShadowStyle =
+  Platform.OS === 'web'
+    ? {
+        boxShadow: '0px 8px 16px rgba(17, 24, 39, 0.08)',
+      }
+    : {
+        shadowColor: '#111827',
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 4,
+      };
+
 export default function ProfileScreen({
   currentUser = ADMIN_ACCOUNT,
   onLogout = () => {},
-  onBack = () => {},
+  onOpenFeed = () => {},
+  onOpenCreate = () => {},
 }) {
   const { width } = useWindowDimensions();
 
   const profile = currentUser ?? ADMIN_ACCOUNT;
+  const postCount = profile?.posts?.length ?? 0;
 
   const infoFields = useMemo(
     () => [
@@ -35,8 +51,9 @@ export default function ProfileScreen({
       { label: 'Số điện thoại', value: profile.phone || 'Chưa cập nhật' },
       { label: 'Ngày sinh', value: profile.birthday || 'Chưa cập nhật' },
       { label: 'Địa chỉ', value: profile.address || 'Chưa cập nhật' },
+      { label: 'Số bài viết', value: `${postCount} bài` },
     ],
-    [profile]
+    [postCount, profile]
   );
 
   const s = useMemo(
@@ -66,8 +83,12 @@ export default function ProfileScreen({
       >
         <View style={styles.card}>
           <View style={styles.topActions}>
-            <Pressable style={styles.ghostButton} onPress={onBack}>
-              <Text style={styles.ghostButtonText}>Quay lại</Text>
+            <Pressable style={styles.ghostButton} onPress={onOpenFeed}>
+              <Text style={styles.ghostButtonText}>Về feed</Text>
+            </Pressable>
+
+            <Pressable style={[styles.ghostButton, styles.secondaryGhost]} onPress={onOpenCreate}>
+              <Text style={styles.ghostButtonText}>Tạo bài</Text>
             </Pressable>
 
             <Pressable style={[styles.ghostButton, styles.logoutGhost]} onPress={onLogout}>
@@ -90,8 +111,8 @@ export default function ProfileScreen({
             ))}
           </View>
 
-          <Pressable style={styles.primaryButton} onPress={onBack}>
-            <Text style={styles.primaryButtonText}>Quay lại blog</Text>
+          <Pressable style={styles.primaryButton} onPress={onOpenFeed}>
+            <Text style={styles.primaryButtonText}>Quay lại trang chủ</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -114,18 +135,16 @@ const createStyles = (s) =>
       backgroundColor: '#FFFFFF',
       borderRadius: s.radiusLg,
       padding: s.spacingLg,
-      shadowColor: '#111827',
-      shadowOpacity: 0.08,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 4,
+      ...cardShadowStyle,
     },
     topActions: {
       marginBottom: s.spacingMd,
       flexDirection: 'row',
       justifyContent: 'space-between',
+      gap: s.spacingSm,
     },
     ghostButton: {
+      flex: 1,
       minWidth: getScale(BASE_WIDTH, 82),
       height: getScale(BASE_WIDTH, 36),
       borderWidth: 1,
@@ -134,6 +153,10 @@ const createStyles = (s) =>
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: '#F9FAFB',
+    },
+    secondaryGhost: {
+      borderColor: '#BFDBFE',
+      backgroundColor: '#EFF6FF',
     },
     logoutGhost: {
       borderColor: '#FCA5A5',

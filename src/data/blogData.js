@@ -1,4 +1,4 @@
-const BLOG_IMAGES = [
+export const BLOG_IMAGES = [
   'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=1200&q=80',
   'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=80',
   'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=1200&q=80',
@@ -19,6 +19,54 @@ const pickImage = (seed = '') => {
   const index = seed.length % BLOG_IMAGES.length;
   return BLOG_IMAGES[index];
 };
+
+const padTime = (value) => String(value).padStart(2, '0');
+
+const formatAbsoluteDate = (value) => {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Vừa xong';
+  }
+
+  return `${padTime(date.getDate())}/${padTime(date.getMonth() + 1)}/${date.getFullYear()}`;
+};
+
+export const getPostDisplayTime = (post) => {
+  if (post?.createdAt) {
+    const createdTime = new Date(post.createdAt).getTime();
+
+    if (!Number.isNaN(createdTime)) {
+      const minutes = Math.max(0, Math.floor((Date.now() - createdTime) / 60000));
+
+      if (minutes < 1) {
+        return 'Vừa xong';
+      }
+
+      if (minutes < 60) {
+        return `${minutes} phút trước`;
+      }
+
+      const hours = Math.floor(minutes / 60);
+
+      if (hours < 24) {
+        return `${hours} giờ trước`;
+      }
+
+      const days = Math.floor(hours / 24);
+
+      if (days < 7) {
+        return `${days} ngày trước`;
+      }
+
+      return formatAbsoluteDate(createdTime);
+    }
+  }
+
+  return post?.time || 'Vừa xong';
+};
+
+export const getFallbackBlogImage = (seed = '') => pickImage(seed);
 
 export const ADMIN_ACCOUNT = {
   id: 'admin',
@@ -90,6 +138,21 @@ export const createLocalUserAccount = ({ name, email, password }) => {
         image: secondImage,
       },
     ],
+  };
+};
+
+export const createLocalPost = ({ caption, image, authorName, seed = '' }) => {
+  const createdAt = new Date().toISOString();
+  const cleanCaption = sanitizeValue(caption);
+  const cleanImage = sanitizeValue(image);
+  const identitySeed = `${seed}${authorName}${createdAt}`;
+
+  return {
+    id: `post-${Date.now()}`,
+    caption: cleanCaption,
+    image: cleanImage || pickImage(identitySeed),
+    createdAt,
+    time: 'Vừa xong',
   };
 };
 
