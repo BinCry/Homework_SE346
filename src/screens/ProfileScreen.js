@@ -1,5 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   Image,
   Platform,
   Pressable,
@@ -8,10 +9,10 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { ADMIN_ACCOUNT } from '../data/blogData';
 
 const BASE_WIDTH = 375;
 
@@ -34,23 +35,36 @@ const cardShadowStyle =
         elevation: 4,
       };
 
+const createInitialForm = (profile) => ({
+  name: profile?.name || '',
+  bio: profile?.bio || '',
+  phone: profile?.phone || '',
+  birthday: profile?.birthday || '',
+  address: profile?.address || '',
+  avatar: profile?.avatar || '',
+});
+
 export default function ProfileScreen({
-  currentUser = ADMIN_ACCOUNT,
+  currentUser,
   onLogout = () => {},
   onOpenFeed = () => {},
   onOpenCreate = () => {},
+  onUpdateProfile = async () => {},
 }) {
   const { width } = useWindowDimensions();
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [form, setForm] = useState(() => createInitialForm(currentUser));
 
-  const profile = currentUser ?? ADMIN_ACCOUNT;
+  const profile = currentUser;
   const postCount = profile?.posts?.length ?? 0;
 
   const infoFields = useMemo(
     () => [
-      { label: 'Email', value: profile.email || 'Chưa cập nhật' },
-      { label: 'Số điện thoại', value: profile.phone || 'Chưa cập nhật' },
-      { label: 'Ngày sinh', value: profile.birthday || 'Chưa cập nhật' },
-      { label: 'Địa chỉ', value: profile.address || 'Chưa cập nhật' },
+      { label: 'Email', value: profile?.email || 'Chưa cập nhật' },
+      { label: 'Số điện thoại', value: profile?.phone || 'Chưa cập nhật' },
+      { label: 'Ngày sinh', value: profile?.birthday || 'Chưa cập nhật' },
+      { label: 'Địa chỉ', value: profile?.address || 'Chưa cập nhật' },
       { label: 'Số bài viết', value: `${postCount} bài` },
     ],
     [postCount, profile]
@@ -65,12 +79,156 @@ export default function ProfileScreen({
       avatarSize: getScale(width, 104),
       titleSize: getScale(width, 28),
       bodySize: getScale(width, 15),
-      buttonHeight: getScale(width, 48),
+      buttonHeight: getScale(width, 44),
     }),
     [width]
   );
 
   const styles = useMemo(() => createStyles(s), [s]);
+
+  const handleStartEdit = () => {
+    setForm(createInitialForm(profile));
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setForm(createInitialForm(profile));
+    setIsEditing(false);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!form.name.trim()) {
+      Alert.alert('Thông báo', 'Tên hiển thị không được để trống.');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      await onUpdateProfile({
+        name: form.name,
+        bio: form.bio,
+        phone: form.phone,
+        birthday: form.birthday,
+        address: form.address,
+        avatar: form.avatar,
+      });
+      setIsEditing(false);
+      Alert.alert('Thành công', 'Đã cập nhật thông tin cá nhân.');
+    } catch (error) {
+      Alert.alert('Có lỗi', 'Không thể cập nhật thông tin lúc này.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const renderReadMode = () => (
+    <>
+      <Text style={styles.name}>{profile?.name}</Text>
+      <Text style={styles.username}>{profile?.username}</Text>
+      <Text style={styles.bio}>{profile?.bio}</Text>
+
+      <View style={styles.infoList}>
+        {infoFields.map((field) => (
+          <View key={field.label} style={styles.infoItem}>
+            <Text style={styles.infoLabel}>{field.label}</Text>
+            <Text style={styles.infoValue}>{field.value}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.rowActions}>
+        <Pressable style={styles.primaryButton} onPress={onOpenFeed}>
+          <Text style={styles.primaryButtonText}>Quay lại trang chủ</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryButton} onPress={handleStartEdit}>
+          <Text style={styles.secondaryButtonText}>Chỉnh sửa hồ sơ</Text>
+        </Pressable>
+      </View>
+    </>
+  );
+
+  const renderEditMode = () => (
+    <>
+      <Text style={styles.editTitle}>Chỉnh sửa thông tin cá nhân</Text>
+
+      <View style={styles.formGroup}>
+        <Text style={styles.formLabel}>Tên hiển thị</Text>
+        <TextInput
+          value={form.name}
+          onChangeText={(value) => setForm((prev) => ({ ...prev, name: value }))}
+          style={styles.formInput}
+        />
+      </View>
+
+      <View style={styles.formGroup}>
+        <Text style={styles.formLabel}>Avatar URL</Text>
+        <TextInput
+          value={form.avatar}
+          onChangeText={(value) => setForm((prev) => ({ ...prev, avatar: value }))}
+          style={styles.formInput}
+          autoCapitalize="none"
+        />
+      </View>
+
+      <View style={styles.formGroup}>
+        <Text style={styles.formLabel}>Bio</Text>
+        <TextInput
+          value={form.bio}
+          onChangeText={(value) => setForm((prev) => ({ ...prev, bio: value }))}
+          style={[styles.formInput, styles.textArea]}
+          multiline
+          textAlignVertical="top"
+        />
+      </View>
+
+      <View style={styles.formGroup}>
+        <Text style={styles.formLabel}>Số điện thoại</Text>
+        <TextInput
+          value={form.phone}
+          onChangeText={(value) => setForm((prev) => ({ ...prev, phone: value }))}
+          style={styles.formInput}
+        />
+      </View>
+
+      <View style={styles.formGroup}>
+        <Text style={styles.formLabel}>Ngày sinh</Text>
+        <TextInput
+          value={form.birthday}
+          onChangeText={(value) => setForm((prev) => ({ ...prev, birthday: value }))}
+          placeholder="YYYY-MM-DD"
+          placeholderTextColor="#94A3B8"
+          style={styles.formInput}
+        />
+      </View>
+
+      <View style={styles.formGroup}>
+        <Text style={styles.formLabel}>Địa chỉ</Text>
+        <TextInput
+          value={form.address}
+          onChangeText={(value) => setForm((prev) => ({ ...prev, address: value }))}
+          style={styles.formInput}
+        />
+      </View>
+
+      <View style={styles.rowActions}>
+        <Pressable
+          style={[styles.primaryButton, isSaving && styles.buttonDisabled]}
+          onPress={handleSaveProfile}
+          disabled={isSaving}
+        >
+          <Text style={styles.primaryButtonText}>{isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}</Text>
+        </Pressable>
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={handleCancelEdit}
+          disabled={isSaving}
+        >
+          <Text style={styles.secondaryButtonText}>Hủy</Text>
+        </Pressable>
+      </View>
+    </>
+  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -96,24 +254,9 @@ export default function ProfileScreen({
             </Pressable>
           </View>
 
-          <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+          <Image source={{ uri: form.avatar || profile?.avatar }} style={styles.avatar} />
 
-          <Text style={styles.name}>{profile.name}</Text>
-          <Text style={styles.username}>{profile.username}</Text>
-          <Text style={styles.bio}>{profile.bio}</Text>
-
-          <View style={styles.infoList}>
-            {infoFields.map((field) => (
-              <View key={field.label} style={styles.infoItem}>
-                <Text style={styles.infoLabel}>{field.label}</Text>
-                <Text style={styles.infoValue}>{field.value}</Text>
-              </View>
-            ))}
-          </View>
-
-          <Pressable style={styles.primaryButton} onPress={onOpenFeed}>
-            <Text style={styles.primaryButtonText}>Quay lại trang chủ</Text>
-          </Pressable>
+          {isEditing ? renderEditMode() : renderReadMode()}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -177,9 +320,9 @@ const createStyles = (s) =>
       alignSelf: 'center',
       borderWidth: 3,
       borderColor: '#E5E7EB',
+      marginBottom: s.spacingMd,
     },
     name: {
-      marginTop: s.spacingMd,
       textAlign: 'center',
       fontSize: s.titleSize,
       fontWeight: '800',
@@ -221,8 +364,11 @@ const createStyles = (s) =>
       color: '#111827',
       fontWeight: '700',
     },
-    primaryButton: {
+    rowActions: {
       marginTop: s.spacingLg,
+      gap: s.spacingSm,
+    },
+    primaryButton: {
       height: s.buttonHeight,
       borderRadius: getScale(BASE_WIDTH, 14),
       justifyContent: 'center',
@@ -233,5 +379,52 @@ const createStyles = (s) =>
       fontSize: getScale(BASE_WIDTH, 15),
       color: '#FFFFFF',
       fontWeight: '800',
+    },
+    secondaryButton: {
+      height: s.buttonHeight,
+      borderRadius: getScale(BASE_WIDTH, 14),
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: '#CBD5E1',
+      backgroundColor: '#F8FAFC',
+    },
+    secondaryButtonText: {
+      fontSize: getScale(BASE_WIDTH, 15),
+      color: '#0F172A',
+      fontWeight: '700',
+    },
+    buttonDisabled: {
+      opacity: 0.75,
+    },
+    editTitle: {
+      fontSize: getScale(BASE_WIDTH, 20),
+      fontWeight: '800',
+      color: '#111827',
+      marginBottom: s.spacingMd,
+      textAlign: 'center',
+    },
+    formGroup: {
+      marginBottom: s.spacingSm,
+    },
+    formLabel: {
+      fontSize: getScale(BASE_WIDTH, 13),
+      color: '#334155',
+      fontWeight: '700',
+      marginBottom: 6,
+    },
+    formInput: {
+      minHeight: getScale(BASE_WIDTH, 42),
+      borderWidth: 1,
+      borderColor: '#CBD5E1',
+      borderRadius: getScale(BASE_WIDTH, 12),
+      backgroundColor: '#F8FAFC',
+      paddingHorizontal: s.spacingSm,
+      color: '#111827',
+      fontSize: getScale(BASE_WIDTH, 14),
+      paddingVertical: Platform.select({ ios: 10, android: 7, default: 10 }),
+    },
+    textArea: {
+      minHeight: getScale(BASE_WIDTH, 90),
     },
   });

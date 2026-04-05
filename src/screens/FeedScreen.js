@@ -1,16 +1,20 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { ADMIN_ACCOUNT, getBlogDataForUser, getPostDisplayTime } from '../data/blogData';
+import { getPostDisplayTime } from '../data/blogData';
 
 const BASE_WIDTH = 375;
 
@@ -20,17 +24,21 @@ const getScale = (screenWidth, size) => {
   return Math.max(size * 0.85, Math.min(scaled, size * 1.25));
 };
 
+const FALLBACK_AVATAR = 'https://i.pravatar.cc/300?u=unknown';
+const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=80';
+
 export default function FeedScreen({
-  currentUser = ADMIN_ACCOUNT,
+  currentUser,
+  feedItems = [],
+  onCreateComment = async () => {},
   onOpenProfile = () => {},
   onOpenCreate = () => {},
 }) {
   const { width } = useWindowDimensions();
+  const [commentDrafts, setCommentDrafts] = useState({});
+  const [submittingPostId, setSubmittingPostId] = useState(null);
 
-  const { profile, featuredPost, posts } = useMemo(
-    () => getBlogDataForUser(currentUser),
-    [currentUser]
-  );
+  const profile = currentUser;
 
   const s = useMemo(
     () => ({
@@ -44,30 +52,114 @@ export default function FeedScreen({
       postImageHeight: getScale(width, 210),
       avatarHeader: getScale(width, 56),
       avatarPost: getScale(width, 46),
+      avatarComment: getScale(width, 30),
     }),
     [width]
   );
 
   const styles = useMemo(() => createStyles(s), [s]);
 
-  const renderPostCard = (post, isFeatured = false) => (
-    <View key={post.id} style={[styles.postCard, isFeatured && styles.featuredCard]}>
-      <View style={styles.postHeader}>
-        <Pressable onPress={onOpenProfile} hitSlop={10}>
-          <Image source={{ uri: profile.avatar }} style={styles.postAvatar} />
-        </Pressable>
+  const handleCommentChange = (postId, value) => {
+    setCommentDrafts((prev) => ({
+      ...prev,
+      [postId]: value,
+    }));
+  };
 
-        <View>
-          <Text style={styles.postName}>{profile.name}</Text>
-          <Text style={styles.postTime}>{getPostDisplayTime(post)}</Text>
+  const handleSubmitComment = async (postId) => {
+    const commentText = (commentDrafts[postId] || '').trim();
+
+    if (!commentText) {
+      Alert.alert('Thông báo', 'Nội dung comment không được để trống.');
+      return;
+    }
+
+    setSubmittingPostId(postId);
+
+    try {
+      await onCreateComment({ postId, content: commentText });
+      setCommentDrafts((prev) => ({
+        ...prev,
+        [postId]: '',
+      }));
+    } catch (error) {
+      Alert.alert('Có lỗi', 'Không thể gửi comment lúc này.');
+    } finally {
+      setSubmittingPostId(null);
+    }
+  };
+
+  const renderCommentItem = (comment) => (
+    <View key={comment.id} style={styles.commentItem}>
+      <Image source={{ uri: comment.author?.avatar || FALLBACK_AVATAR }} style={styles.commentAvatar} />
+      <View style={styles.commentBodyWrap}>
+        <View style={styles.commentMetaRow}>
+          <Text style={styles.commentAuthor}>{comment.author?.name || 'Người dùng'}</Text>
+          <Text style={styles.commentTime}>{getPostDisplayTime({ createdAt: comment.createdAt })}</Text>
         </View>
+        <Text style={styles.commentContent}>{comment.content}</Text>
       </View>
-
-      <Text style={styles.postCaption}>{post.caption}</Text>
-
-      <Image source={{ uri: post.image }} style={styles.postImage} />
     </View>
   );
+
+  const renderPostCard = (post) => {
+    const isCommentSubmitting = submittingPostId === post.id;
+
+    return (
+      <View key={post.id} style={styles.postCard}>
+        <View style={styles.postHeader}>
+          <Pressable onPress={onOpenProfile} hitSlop={10}>
+            <Image source={{ uri: post.author?.avatar || FALLBACK_AVATAR }} style={styles.postAvatar} />
+          </Pressable>
+
+          <View>
+            <Text style={styles.postName}>{post.author?.name || 'Người dùng'}</Text>
+            <Text style={styles.postTime}>{getPostDisplayTime(post)}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.postCaption}>{post.caption}</Text>
+
+        <Image source={{ uri: post.image || FALLBACK_IMAGE }} style={styles.postImage} />
+
+        <View style={styles.commentSection}>
+          <Text style={styles.commentTitle}>Bình luận ({post.comments?.length ?? 0})</Text>
+
+          {post.comments?.length ? (
+            post.comments.map((comment) => renderCommentItem(comment))
+          ) : (
+            <Text style={styles.commentEmpty}>Chưa có bình luận nào cho bài viết này.</Text>
+          )}
+
+          <View style={styles.commentInputRow}>
+            <Image
+              source={{ uri: currentUser?.avatar || FALLBACK_AVATAR }}
+              style={styles.commentInputAvatar}
+            />
+            <TextInput
+              value={commentDrafts[post.id] || ''}
+              onChangeText={(value) => handleCommentChange(post.id, value)}
+              placeholder="Nhập bình luận..."
+              placeholderTextColor="#6B7280"
+              style={styles.commentInput}
+              editable={!isCommentSubmitting}
+            />
+            <Pressable
+              style={[styles.commentSendButton, isCommentSubmitting && styles.commentSendButtonDisabled]}
+              onPress={() => handleSubmitComment(post.id)}
+              disabled={isCommentSubmitting}
+            >
+              {isCommentSubmitting ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.commentSendText}>Gửi</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -80,16 +172,12 @@ export default function FeedScreen({
       >
         <View style={styles.headerRow}>
           <Pressable onPress={onOpenProfile} hitSlop={10}>
-            <Image source={{ uri: profile.avatar }} style={styles.headerAvatar} />
+            <Image source={{ uri: profile?.avatar || FALLBACK_AVATAR }} style={styles.headerAvatar} />
           </Pressable>
 
           <Pressable style={styles.headerNameWrap} onPress={onOpenProfile}>
-            <Text style={styles.headerName}>{profile.name}</Text>
-            <Text style={styles.headerSub}>
-              {profile.role === 'admin'
-                ? 'Đang xem blog riêng của admin'
-                : 'Đang xem blog cá nhân của bạn'}
-            </Text>
+            <Text style={styles.headerName}>{profile?.name || 'Người dùng'}</Text>
+            <Text style={styles.headerSub}>Feed chung của tất cả account local</Text>
           </Pressable>
 
           <Pressable style={styles.createButton} onPress={onOpenCreate}>
@@ -97,21 +185,19 @@ export default function FeedScreen({
           </Pressable>
         </View>
 
-        {featuredPost ? (
-          renderPostCard(featuredPost, true)
+        {feedItems.length ? (
+          feedItems.map((post) => renderPostCard(post))
         ) : (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Chưa có bài viết</Text>
             <Text style={styles.emptyText}>
-              Bạn đã vào đúng feed rồi. Chỉ còn thiếu một bài đăng đầu tiên để lấp đầy blog cá nhân.
+              Feed chung chưa có dữ liệu. Bạn có thể tạo bài viết mới để bắt đầu.
             </Text>
             <Pressable style={styles.emptyButton} onPress={onOpenCreate}>
               <Text style={styles.emptyButtonText}>Tạo bài viết ngay</Text>
             </Pressable>
           </View>
         )}
-
-        {posts.map((post) => renderPostCard(post))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -175,9 +261,6 @@ const createStyles = (s) =>
       padding: s.spacingMd,
       marginBottom: s.spacingMd,
     },
-    featuredCard: {
-      backgroundColor: '#E6ECF5',
-    },
     postHeader: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -214,6 +297,112 @@ const createStyles = (s) =>
       height: s.postImageHeight,
       borderRadius: s.radiusLg,
       backgroundColor: '#D1D5DB',
+    },
+    commentSection: {
+      marginTop: s.spacingMd,
+      backgroundColor: '#F7F8FA',
+      borderRadius: s.radiusLg,
+      padding: s.spacingSm,
+      borderWidth: 1,
+      borderColor: '#E5E7EB',
+    },
+    commentTitle: {
+      fontSize: getScale(BASE_WIDTH, 14),
+      color: '#111827',
+      fontWeight: '800',
+      marginBottom: s.spacingSm,
+    },
+    commentEmpty: {
+      fontSize: getScale(BASE_WIDTH, 13),
+      color: '#6B7280',
+      fontWeight: '500',
+      marginBottom: s.spacingSm,
+    },
+    commentItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginBottom: s.spacingSm,
+    },
+    commentAvatar: {
+      width: s.avatarComment,
+      height: s.avatarComment,
+      borderRadius: s.avatarComment / 2,
+      marginRight: s.spacingXs,
+      backgroundColor: '#D1D5DB',
+    },
+    commentBodyWrap: {
+      flex: 1,
+      backgroundColor: '#FFFFFF',
+      borderRadius: getScale(BASE_WIDTH, 12),
+      paddingHorizontal: s.spacingSm,
+      paddingVertical: s.spacingXs,
+      borderWidth: 1,
+      borderColor: '#E5E7EB',
+    },
+    commentMetaRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 2,
+      gap: s.spacingXs,
+    },
+    commentAuthor: {
+      fontSize: getScale(BASE_WIDTH, 13),
+      fontWeight: '700',
+      color: '#111827',
+      flexShrink: 1,
+    },
+    commentTime: {
+      fontSize: getScale(BASE_WIDTH, 11),
+      color: '#6B7280',
+      fontWeight: '600',
+    },
+    commentContent: {
+      fontSize: getScale(BASE_WIDTH, 13),
+      color: '#1F2937',
+      lineHeight: Math.round(getScale(BASE_WIDTH, 13) * 1.35),
+      fontWeight: '500',
+    },
+    commentInputRow: {
+      marginTop: s.spacingXs,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: s.spacingXs,
+    },
+    commentInputAvatar: {
+      width: s.avatarComment,
+      height: s.avatarComment,
+      borderRadius: s.avatarComment / 2,
+      backgroundColor: '#D1D5DB',
+    },
+    commentInput: {
+      flex: 1,
+      minHeight: getScale(BASE_WIDTH, 36),
+      borderWidth: 1,
+      borderColor: '#CBD5E1',
+      borderRadius: getScale(BASE_WIDTH, 12),
+      backgroundColor: '#FFFFFF',
+      paddingHorizontal: s.spacingSm,
+      color: '#111827',
+      fontSize: getScale(BASE_WIDTH, 13),
+      paddingVertical: Platform.select({ ios: 8, android: 6, default: 8 }),
+    },
+    commentSendButton: {
+      minWidth: getScale(BASE_WIDTH, 52),
+      height: getScale(BASE_WIDTH, 36),
+      borderRadius: getScale(BASE_WIDTH, 10),
+      backgroundColor: '#111827',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: s.spacingSm,
+    },
+    commentSendButtonDisabled: {
+      opacity: 0.75,
+    },
+    commentSendText: {
+      color: '#FFFFFF',
+      fontSize: getScale(BASE_WIDTH, 13),
+      fontWeight: '700',
     },
     emptyCard: {
       backgroundColor: '#ECECEE',

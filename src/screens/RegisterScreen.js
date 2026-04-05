@@ -14,12 +14,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { createLocalUserAccount } from '../data/blogData';
-import {
-  getStoredAccounts,
-  normalizeCredential,
-  saveStoredAccounts,
-} from '../storage/accountStorage';
+import { registerLocalAccount } from '../storage/localDatabase';
 
 const BASE_WIDTH = 375;
 
@@ -55,7 +50,6 @@ export default function RegisterScreen({
 
   const s = useMemo(
     () => ({
-      spacingXs: getScale(width, 8),
       spacingSm: getScale(width, 12),
       spacingMd: getScale(width, 16),
       spacingLg: getScale(width, 24),
@@ -64,17 +58,13 @@ export default function RegisterScreen({
       radiusLg: getScale(width, 18),
       titleSize: getScale(width, 46),
       bodySize: getScale(width, 16),
-      labelSize: getScale(width, 24),
       buttonSize: getScale(width, 28),
       inputHeight: getScale(width, 54),
     }),
     [width]
   );
 
-  const styles = useMemo(
-    () => createStyles(s, width, height),
-    [s, width, height]
-  );
+  const styles = useMemo(() => createStyles(s, width, height), [s, width, height]);
 
   const handleRegister = async () => {
     const cleanName = name.trim();
@@ -97,37 +87,14 @@ export default function RegisterScreen({
       return;
     }
 
-    const newAccount = createLocalUserAccount({
-      name: cleanName,
-      email: cleanEmail,
-      password: cleanPassword,
-    });
-
-    if (
-      normalizeCredential(cleanEmail) === 'admin' ||
-      normalizeCredential(cleanName) === 'admin' ||
-      normalizeCredential(newAccount.username) === '@admin'
-    ) {
-      Alert.alert('Thông báo', 'Tài khoản admin đã được dành riêng.');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
-      const storedAccounts = await getStoredAccounts();
-      const hasDuplicate = storedAccounts.some(
-        (account) =>
-          normalizeCredential(account.email) === normalizeCredential(cleanEmail) ||
-          normalizeCredential(account.username) === normalizeCredential(newAccount.username)
-      );
-
-      if (hasDuplicate) {
-        Alert.alert('Thông báo', 'Email hoặc tên đăng nhập đã tồn tại.');
-        return;
-      }
-
-      await saveStoredAccounts([...storedAccounts, newAccount]);
+      const newAccount = await registerLocalAccount({
+        name: cleanName,
+        email: cleanEmail,
+        password: cleanPassword,
+      });
 
       setName('');
       setEmail('');
@@ -135,7 +102,13 @@ export default function RegisterScreen({
       setConfirmPassword('');
       onRegisterSuccess(newAccount);
     } catch (error) {
-      Alert.alert('Có lỗi xảy ra', 'Không thể lưu tài khoản lúc này.');
+      if (error?.code === 'DUPLICATE_EMAIL' || error?.code === 'DUPLICATE_USERNAME') {
+        Alert.alert('Thông báo', 'Email hoặc tên đăng nhập đã tồn tại.');
+      } else if (error?.code === 'WEAK_PASSWORD') {
+        Alert.alert('Thông báo', 'Mật khẩu cần ít nhất 4 ký tự.');
+      } else {
+        Alert.alert('Có lỗi xảy ra', 'Không thể lưu tài khoản lúc này.');
+      }
     } finally {
       setIsSubmitting(false);
     }

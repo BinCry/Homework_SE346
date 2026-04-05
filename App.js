@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -14,8 +14,14 @@ import RegisterScreen from './src/screens/RegisterScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import ExploreScreen from './src/screens/ExploreScreen';
 import CreatePostScreen from './src/screens/CreatePostScreen';
-import { createLocalPost } from './src/data/blogData';
-import { hydrateUserWithStoredPosts, savePostsForUser } from './src/storage/postStorage';
+import {
+  createCommentForPost,
+  createPostForUser,
+  getGlobalFeedWithComments,
+  getUserProfileById,
+  initializeLocalDatabase,
+  updateUserProfile,
+} from './src/storage/localDatabase';
 
 const APP_TABS = [
   { key: 'feed', label: 'Trang chủ' },
@@ -61,7 +67,49 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [lastIdentifier, setLastIdentifier] = useState('admin');
   const [activeTab, setActiveTab] = useState('feed');
+  const [feedItems, setFeedItems] = useState([]);
+  const [isInitializingDatabase, setIsInitializingDatabase] = useState(true);
   const [isHydratingUser, setIsHydratingUser] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const bootstrapDatabase = async () => {
+      try {
+        await initializeLocalDatabase();
+      } finally {
+        if (mounted) {
+          setIsInitializingDatabase(false);
+        }
+      }
+    };
+
+    bootstrapDatabase();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const refreshFeed = useCallback(async () => {
+    const nextFeed = await getGlobalFeedWithComments();
+    setFeedItems(nextFeed);
+    return nextFeed;
+  }, []);
+
+  const refreshCurrentUser = useCallback(async (userId) => {
+    if (!userId) {
+      return null;
+    }
+
+    const nextUser = await getUserProfileById(userId);
+
+    if (nextUser) {
+      setCurrentUser(nextUser);
+    }
+
+    return nextUser;
+  }, []);
 
   const currentScreen = useMemo(() => {
     if (!currentUser) {
@@ -85,21 +133,8 @@ export default function App() {
           currentUser={currentUser}
           onOpenFeed={() => setActiveTab('feed')}
           onCreatePost={async ({ caption, image }) => {
-            const newPost = createLocalPost({
-              caption,
-              image,
-              authorName: currentUser.name,
-              seed: currentUser.email || currentUser.id,
-            });
-
-            const nextPosts = [newPost, ...(currentUser.posts ?? [])];
-            const nextUser = {
-              ...currentUser,
-              posts: nextPosts,
-            };
-
-            await savePostsForUser(currentUser.id, nextPosts);
-            setCurrentUser(nextUser);
+            await createPostForUser(currentUser.id, { caption, image });
+            await Promise.all([refreshFeed(), refreshCurrentUser(currentUser.id)]);
           }}
         />
       );
@@ -111,9 +146,15 @@ export default function App() {
           currentUser={currentUser}
           onOpenFeed={() => setActiveTab('feed')}
           onOpenCreate={() => setActiveTab('create')}
+          onUpdateProfile={async (profilePatch) => {
+            const updatedUser = await updateUserProfile(currentUser.id, profilePatch);
+            setCurrentUser(updatedUser);
+            await refreshFeed();
+          }}
           onLogout={() => {
             setLastIdentifier(currentUser?.role === 'admin' ? 'admin' : currentUser?.email ?? '');
             setCurrentUser(null);
+            setFeedItems([]);
             setActiveTab('feed');
             setAuthScreen('login');
           }}
@@ -124,18 +165,24 @@ export default function App() {
     return (
       <FeedScreen
         currentUser={currentUser}
+        feedItems={feedItems}
+        onCreateComment={async ({ postId, content }) => {
+          await createCommentForPost(postId, currentUser.id, content);
+          await refreshFeed();
+        }}
         onOpenProfile={() => setActiveTab('profile')}
         onOpenCreate={() => setActiveTab('create')}
       />
     );
-  }, [activeTab, currentUser]);
+  }, [activeTab, currentUser, feedItems, refreshCurrentUser, refreshFeed]);
 
   const handleLoginSuccess = async (user) => {
     setIsHydratingUser(true);
 
     try {
-      const hydratedUser = await hydrateUserWithStoredPosts(user);
-      setCurrentUser(hydratedUser);
+      const hydratedUser = await getUserProfileById(user.id);
+      setCurrentUser(hydratedUser ?? user);
+      await refreshFeed();
       setActiveTab('feed');
       setAuthScreen('app');
     } finally {
@@ -155,7 +202,7 @@ export default function App() {
     );
   }
 
-  if (isHydratingUser) {
+  if (isInitializingDatabase || isHydratingUser) {
     return <LoadingScreen />;
   }
 

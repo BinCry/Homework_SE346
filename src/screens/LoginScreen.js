@@ -14,12 +14,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { ADMIN_ACCOUNT } from '../data/blogData';
-import {
-  findAccountByIdentifier,
-  getStoredAccounts,
-  normalizeCredential,
-} from '../storage/accountStorage';
+import { loginWithIdentifier, normalizeCredential } from '../storage/localDatabase';
 
 const BASE_WIDTH = 375;
 
@@ -44,8 +39,8 @@ const cardShadowStyle =
 
 export default function LoginScreen({
   initialIdentifier = 'admin',
-  onSwitchToRegister = () => { },
-  onLoginSuccess = () => { },
+  onSwitchToRegister = () => {},
+  onLoginSuccess = () => {},
 }) {
   const { width, height } = useWindowDimensions();
   const [identifier, setIdentifier] = useState(initialIdentifier || 'admin');
@@ -61,7 +56,6 @@ export default function LoginScreen({
 
   const s = useMemo(
     () => ({
-      spacingXs: getScale(width, 8),
       spacingSm: getScale(width, 12),
       spacingMd: getScale(width, 16),
       spacingLg: getScale(width, 24),
@@ -70,17 +64,13 @@ export default function LoginScreen({
       radiusLg: getScale(width, 18),
       titleSize: getScale(width, 46),
       bodySize: getScale(width, 16),
-      labelSize: getScale(width, 24),
       buttonSize: getScale(width, 28),
       inputHeight: getScale(width, 54),
     }),
     [width]
   );
 
-  const styles = useMemo(
-    () => createStyles(s, width, height),
-    [s, width, height]
-  );
+  const styles = useMemo(() => createStyles(s, width, height), [s, width, height]);
 
   const handleLogin = async () => {
     const cleanIdentifier = identifier.trim();
@@ -94,25 +84,10 @@ export default function LoginScreen({
     setIsSubmitting(true);
 
     try {
-      const normalizedIdentifier = normalizeCredential(cleanIdentifier);
-
-      if (
-        (normalizedIdentifier === 'admin' || normalizedIdentifier === '@admin') &&
-        cleanPassword === ADMIN_ACCOUNT.password
-      ) {
-        onLoginSuccess(ADMIN_ACCOUNT);
-        return;
-      }
-
-      const storedAccounts = await getStoredAccounts();
-      const matchedAccount = findAccountByIdentifier(storedAccounts, cleanIdentifier);
-
-      if (!matchedAccount || matchedAccount.password !== cleanPassword) {
-        Alert.alert('Đăng nhập thất bại', 'Tài khoản hoặc mật khẩu không đúng.');
-        return;
-      }
-
+      const matchedAccount = await loginWithIdentifier(cleanIdentifier, cleanPassword);
       onLoginSuccess(matchedAccount);
+    } catch (error) {
+      Alert.alert('Đăng nhập thất bại', 'Tài khoản hoặc mật khẩu không đúng.');
     } finally {
       setIsSubmitting(false);
     }
@@ -158,9 +133,6 @@ export default function LoginScreen({
                 textAlignVertical="center"
                 style={[styles.input, styles.passwordInput]}
               />
-              <Pressable hitSlop={10} style={styles.forgotWrap}>
-                <Text style={styles.forgotText}>Quên mật khẩu?</Text>
-              </Pressable>
             </View>
 
             <Pressable
@@ -176,9 +148,7 @@ export default function LoginScreen({
             </Pressable>
 
             <View style={styles.switchWrap}>
-              <Text style={styles.switchText}>
-                {'Chưa có tài khoản?'}
-              </Text>
+              <Text style={styles.switchText}>Chưa có tài khoản?</Text>
               <Pressable hitSlop={10} onPress={onSwitchToRegister}>
                 <Text style={styles.switchAction}>Đăng ký</Text>
               </Pressable>
@@ -256,15 +226,6 @@ const createStyles = (s, width, height) => {
       paddingTop: Platform.OS === 'android' ? 9 : 0,
       paddingBottom: Platform.OS === 'android' ? 1 : 0,
       lineHeight: Platform.OS === 'android' ? getScale(width, 20) : Math.round(s.bodySize * 1.2),
-    },
-    forgotWrap: {
-      marginTop: s.spacingSm,
-      alignSelf: 'flex-start',
-    },
-    forgotText: {
-      fontSize: getScale(width, 14),
-      fontWeight: '600',
-      color: '#3E4C66',
     },
     button: {
       alignSelf: 'center',
