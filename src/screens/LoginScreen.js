@@ -14,7 +14,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { loginWithIdentifier, normalizeCredential } from '../storage/localDatabase';
+import { loginWithIdentifier } from '../storage/localDatabase';
 
 const BASE_WIDTH = 375;
 
@@ -38,20 +38,18 @@ const cardShadowStyle =
       };
 
 export default function LoginScreen({
-  initialIdentifier = 'admin',
+  initialIdentifier = '',
   onSwitchToRegister = () => {},
   onLoginSuccess = () => {},
 }) {
   const { width, height } = useWindowDimensions();
-  const [identifier, setIdentifier] = useState(initialIdentifier || 'admin');
-  const [password, setPassword] = useState(
-    normalizeCredential(initialIdentifier) === 'admin' ? 'admin' : ''
-  );
+  const [identifier, setIdentifier] = useState(initialIdentifier || '');
+  const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    setIdentifier(initialIdentifier || 'admin');
-    setPassword(normalizeCredential(initialIdentifier) === 'admin' ? 'admin' : '');
+    setIdentifier(initialIdentifier || '');
+    setPassword('');
   }, [initialIdentifier]);
 
   const s = useMemo(
@@ -87,7 +85,11 @@ export default function LoginScreen({
       const matchedAccount = await loginWithIdentifier(cleanIdentifier, cleanPassword);
       onLoginSuccess(matchedAccount);
     } catch (error) {
-      Alert.alert('Đăng nhập thất bại', 'Tài khoản hoặc mật khẩu không đúng.');
+      if (error?.code === 'NETWORK_ERROR') {
+        Alert.alert('Không kết nối được', 'Không thể kết nối đến Social API lúc này.');
+      } else {
+        Alert.alert('Đăng nhập thất bại', 'Tài khoản hoặc mật khẩu không đúng.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -109,7 +111,7 @@ export default function LoginScreen({
             <Text style={styles.title}>Đăng nhập</Text>
 
             <View style={styles.section}>
-              <Text style={styles.label}>Email/Tên đăng nhập</Text>
+              <Text style={styles.label}>Email</Text>
               <TextInput
                 value={identifier}
                 onChangeText={setIdentifier}

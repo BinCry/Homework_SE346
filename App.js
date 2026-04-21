@@ -16,6 +16,7 @@ import ExploreScreen from './src/screens/ExploreScreen';
 import CreatePostScreen from './src/screens/CreatePostScreen';
 import {
   createCommentForPost,
+  deletePostById,
   createPostForUser,
   getGlobalFeedWithComments,
   getUserProfileById,
@@ -65,7 +66,7 @@ function LoadingScreen() {
 export default function App() {
   const [authScreen, setAuthScreen] = useState('login');
   const [currentUser, setCurrentUser] = useState(null);
-  const [lastIdentifier, setLastIdentifier] = useState('admin');
+  const [lastIdentifier, setLastIdentifier] = useState('');
   const [activeTab, setActiveTab] = useState('feed');
   const [feedItems, setFeedItems] = useState([]);
   const [isInitializingDatabase, setIsInitializingDatabase] = useState(true);
@@ -152,7 +153,7 @@ export default function App() {
             await refreshFeed();
           }}
           onLogout={() => {
-            setLastIdentifier(currentUser?.role === 'admin' ? 'admin' : currentUser?.email ?? '');
+            setLastIdentifier(currentUser?.email ?? '');
             setCurrentUser(null);
             setFeedItems([]);
             setActiveTab('feed');
@@ -169,6 +170,10 @@ export default function App() {
         onCreateComment={async ({ postId, content }) => {
           await createCommentForPost(postId, currentUser.id, content);
           await refreshFeed();
+        }}
+        onDeletePost={async (postId) => {
+          await deletePostById(postId, currentUser?.email);
+          await Promise.all([refreshFeed(), refreshCurrentUser(currentUser.id)]);
         }}
         onOpenProfile={() => setActiveTab('profile')}
         onOpenCreate={() => setActiveTab('create')}
@@ -279,3 +284,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+

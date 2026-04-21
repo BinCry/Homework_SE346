@@ -25,18 +25,21 @@ const getScale = (screenWidth, size) => {
 };
 
 const FALLBACK_AVATAR = 'https://i.pravatar.cc/300?u=unknown';
-const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=80';
+const FALLBACK_IMAGE =
+  'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=80';
 
 export default function FeedScreen({
   currentUser,
   feedItems = [],
   onCreateComment = async () => {},
+  onDeletePost = async () => {},
   onOpenProfile = () => {},
   onOpenCreate = () => {},
 }) {
   const { width } = useWindowDimensions();
   const [commentDrafts, setCommentDrafts] = useState({});
   const [submittingPostId, setSubmittingPostId] = useState(null);
+  const [deletingPostId, setDeletingPostId] = useState(null);
 
   const profile = currentUser;
 
@@ -89,6 +92,41 @@ export default function FeedScreen({
     }
   };
 
+  const isOwnPost = (post) => {
+    const currentEmail = (currentUser?.email || '').trim().toLowerCase();
+    const authorEmail = (post?.author?.id || post?.authorId || '').trim().toLowerCase();
+    return Boolean(currentEmail && authorEmail && currentEmail === authorEmail);
+  };
+
+  const handleDeletePost = (post) => {
+    const postId = post?.id;
+
+    if (!postId) {
+      return;
+    }
+
+    Alert.alert('Xóa bài viết', 'Bạn có chắc chắn muốn xóa bài viết này?', [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Xóa',
+        style: 'destructive',
+        onPress: () => {
+          (async () => {
+            setDeletingPostId(postId);
+
+            try {
+              await onDeletePost(postId);
+            } catch (error) {
+              Alert.alert('Có lỗi', 'Không thể xóa bài viết lúc này.');
+            } finally {
+              setDeletingPostId(null);
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
   const renderCommentItem = (comment) => (
     <View key={comment.id} style={styles.commentItem}>
       <Image source={{ uri: comment.author?.avatar || FALLBACK_AVATAR }} style={styles.commentAvatar} />
@@ -104,6 +142,8 @@ export default function FeedScreen({
 
   const renderPostCard = (post) => {
     const isCommentSubmitting = submittingPostId === post.id;
+    const isDeleting = deletingPostId === post.id;
+    const canDelete = isOwnPost(post);
 
     return (
       <View key={post.id} style={styles.postCard}>
@@ -112,10 +152,24 @@ export default function FeedScreen({
             <Image source={{ uri: post.author?.avatar || FALLBACK_AVATAR }} style={styles.postAvatar} />
           </Pressable>
 
-          <View>
+          <View style={styles.postMeta}>
             <Text style={styles.postName}>{post.author?.name || 'Người dùng'}</Text>
             <Text style={styles.postTime}>{getPostDisplayTime(post)}</Text>
           </View>
+
+          {canDelete ? (
+            <Pressable
+              style={[styles.deleteButton, isDeleting && styles.deleteButtonDisabled]}
+              onPress={() => handleDeletePost(post)}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.deleteButtonText}>Xóa</Text>
+              )}
+            </Pressable>
+          ) : null}
         </View>
 
         <Text style={styles.postCaption}>{post.caption}</Text>
@@ -132,10 +186,7 @@ export default function FeedScreen({
           )}
 
           <View style={styles.commentInputRow}>
-            <Image
-              source={{ uri: currentUser?.avatar || FALLBACK_AVATAR }}
-              style={styles.commentInputAvatar}
-            />
+            <Image source={{ uri: currentUser?.avatar || FALLBACK_AVATAR }} style={styles.commentInputAvatar} />
             <TextInput
               value={commentDrafts[post.id] || ''}
               onChangeText={(value) => handleCommentChange(post.id, value)}
@@ -177,7 +228,7 @@ export default function FeedScreen({
 
           <Pressable style={styles.headerNameWrap} onPress={onOpenProfile}>
             <Text style={styles.headerName}>{profile?.name || 'Người dùng'}</Text>
-            <Text style={styles.headerSub}>Feed chung của tất cả account local</Text>
+            <Text style={styles.headerSub}>Feed chung từ social API</Text>
           </Pressable>
 
           <Pressable style={styles.createButton} onPress={onOpenCreate}>
@@ -190,9 +241,7 @@ export default function FeedScreen({
         ) : (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>Chưa có bài viết</Text>
-            <Text style={styles.emptyText}>
-              Feed chung chưa có dữ liệu. Bạn có thể tạo bài viết mới để bắt đầu.
-            </Text>
+            <Text style={styles.emptyText}>Feed đang trống. Bạn có thể tạo bài viết mới để bắt đầu.</Text>
             <Pressable style={styles.emptyButton} onPress={onOpenCreate}>
               <Text style={styles.emptyButtonText}>Tạo bài viết ngay</Text>
             </Pressable>
@@ -274,6 +323,9 @@ const createStyles = (s) =>
       borderColor: '#E5E7EB',
       marginRight: s.spacingSm,
     },
+    postMeta: {
+      flex: 1,
+    },
     postName: {
       fontSize: getScale(BASE_WIDTH, 19),
       fontWeight: '800',
@@ -284,6 +336,23 @@ const createStyles = (s) =>
       fontSize: getScale(BASE_WIDTH, 14),
       color: '#4B5563',
       fontWeight: '500',
+    },
+    deleteButton: {
+      minWidth: getScale(BASE_WIDTH, 54),
+      height: getScale(BASE_WIDTH, 34),
+      borderRadius: getScale(BASE_WIDTH, 10),
+      backgroundColor: '#991B1B',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: s.spacingXs,
+    },
+    deleteButtonDisabled: {
+      opacity: 0.75,
+    },
+    deleteButtonText: {
+      color: '#FFFFFF',
+      fontSize: getScale(BASE_WIDTH, 12),
+      fontWeight: '700',
     },
     postCaption: {
       fontSize: s.bodySize,
